@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Stock Ledger">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#FFFFFF">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%23FFFFFF'/%3E%3Crect x='6' y='6' width='168' height='168' fill='none' stroke='%23000000' stroke-width='4'/%3E%3Ctext x='90' y='108' font-family='Georgia,serif' font-size='64' fill='%23000000' text-anchor='middle'%3ESL%3C/text%3E%3C/svg%3E">
+<title>Stock Ledger</title>
+<style>
+  :root{
+    color-scheme: light;
+    --paper:#FFFFFF;
+    --paper-dim:#F2EBDA;
+    --ink:#000000;
+    --ink-soft:#7A7263;
+    --line:#E4D9BD;
+    --denim:#3C5878;
+    --denim-dark:#2B415B;
+    --thread:#A73E36;
+    --tag:#C68A2E;
+    --card:#FAF3E2;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  html{scroll-padding-top:env(safe-area-inset-top,0px);}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:640px;margin:0 auto;padding:20px 18px 80px;}
+
+  header.top{
+    padding-top:calc(14px + env(safe-area-inset-top,0px));
+    display:flex;align-items:baseline;justify-content:space-between;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:14px;
+    margin-bottom:10px;
+  }
+  header.top h1{
+    font-size:26px;margin:0;font-weight:400;letter-spacing:0.2px;
+  }
+  header.top .sub{font-size:13px;color:var(--ink-soft);font-style:italic;}
+
+  .sold-line{
+    font-size:13px;color:var(--ink-soft);
+    padding:8px 0 12px;
+    border-bottom:1px solid var(--line);
+    margin-bottom:14px;
+    display:flex;justify-content:space-between;align-items:center;
+    flex-wrap:wrap;gap:8px;
+  }
+  .sold-line strong{color:var(--ink);font-weight:600;}
+  .backup-links{display:flex;gap:14px;}
+  .linklike{
+    background:none;border:none;font-family:inherit;font-size:13px;
+    color:var(--denim);text-decoration:underline;text-underline-offset:2px;
+    cursor:pointer;padding:0;
+  }
+
+  .search-row{margin-bottom:14px;}
+  .search-row input{
+    width:100%;padding:10px 12px;font-family:inherit;font-size:15px;
+    border:1px solid var(--line);border-radius:5px;background:var(--card);color:var(--ink);
+  }
+  .search-row input:focus{outline:2px solid var(--denim);outline-offset:1px;}
+
+  .threshold-row{
+    display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-soft);
+    margin-bottom:14px;
+  }
+  .threshold-row input{
+    width:56px;padding:5px 7px;font-family:inherit;font-size:13px;
+    border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--ink);
+  }
+
+  .tabs{
+    display:flex;gap:0;overflow-x:auto;
+    border-bottom:1px solid var(--line);
+    margin-bottom:16px;
+    -ms-overflow-style:none;scrollbar-width:none;
+  }
+  .tabs::-webkit-scrollbar{display:none;}
+  .tab{
+    flex:0 0 auto;
+    padding:9px 15px;
+    font-family:inherit;
+    font-size:15px;
+    color:var(--ink-soft);
+    background:none;
+    border:none;
+    border-bottom:3px solid transparent;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .tab.active{color:var(--ink);border-bottom-color:var(--denim);font-weight:600;}
+  .tab .count{font-size:11px;color:var(--ink-soft);margin-left:4px;}
+
+  .summary-line{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-size:13px;color:var(--ink-soft);margin-bottom:14px;
+  }
+
+  .item{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:3px;
+    padding:12px 14px;
+    margin-bottom:10px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .item .info{flex:1;min-width:0;cursor:pointer;}
+  .item .name{font-size:16px;margin:0 0 3px;}
+  .item .meta{font-size:12.5px;color:var(--ink-soft);}
+  .item .meta span + span::before{content:"·";margin:0 6px;color:var(--line);}
+  .item .qty-block{display:flex;align-items:center;gap:8px;}
+  .item .qty-num{
+    min-width:30px;text-align:center;font-size:18px;font-variant-numeric:tabular-nums;
+  }
+  .item .qty-num.low{color:var(--thread);font-weight:700;}
+  .stepper{display:flex;flex-direction:column;gap:4px;}
+  .stepbtn{
+    width:30px;height:26px;
+    border:1px solid var(--ink);
+    background:var(--paper);
+    color:var(--ink);
+    font-size:15px;line-height:1;
+    cursor:pointer;
+    border-radius:2px;
+    font-family:inherit;
+  }
+  .stepbtn:active{background:var(--ink);color:var(--paper);}
+  .stepbtn.minus{border-color:var(--thread);color:var(--thread);}
+  .stepbtn.minus:active{background:var(--thread);color:var(--paper);}
+
+  .row-actions{display:flex;flex-direction:column;align-items:flex-end;gap:4px;}
+  .del, .editbtn{
+    background:none;border:none;color:var(--ink-soft);
+    font-size:12px;cursor:pointer;padding:2px;
+    text-decoration:underline;text-underline-offset:2px;
+  }
+
+  .empty{
+    padding:40px 10px;text-align:center;color:var(--ink-soft);font-style:italic;font-size:14.5px;
+  }
+
+  .fab{
+    position:fixed;
+    right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));
+    background:var(--denim);
+    color:var(--paper);
+    border:none;
+    width:56px;height:56px;
+    border-radius:50%;
+    font-size:28px;
+    box-shadow:0 3px 10px rgba(0,0,0,.25);
+    cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .fab:active{background:var(--denim-dark);}
+
+  .overlay{
+    position:fixed;inset:0;background:rgba(36,32,24,.5);
+    display:none;align-items:flex-end;justify-content:center;
+    z-index:20;
+  }
+  .overlay.show{display:flex;}
+  .sheet{
+    background:var(--paper);
+    width:100%;max-width:640px;
+    border-radius:10px 10px 0 0;
+    padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));
+    max-height:85vh;overflow-y:auto;
+    border-top:2px solid var(--ink);
+  }
+  .sheet h2{margin:0 0 16px;font-size:20px;font-weight:400;}
+  .field{margin-bottom:14px;}
+  .field label{
+    display:block;font-size:12.5px;color:var(--ink-soft);margin-bottom:5px;
+  }
+  .field input, .field select{
+    width:100%;
+    padding:10px 11px;
+    font-family:inherit;
+    font-size:16px;
+    border:1px solid var(--line);
+    border-radius:4px;
+    background:var(--card);
+    color:var(--ink);
+  }
+  .field input:focus, .field select:focus{outline:2px solid var(--denim);outline-offset:1px;}
+  .cat-grid{display:flex;flex-wrap:wrap;gap:8px;}
+  .cat-pick{
+    padding:8px 13px;border:1px solid var(--line);border-radius:20px;
+    background:var(--card);font-family:inherit;font-size:14px;cursor:pointer;color:var(--ink);
+  }
+  .cat-pick.sel{background:var(--denim);color:var(--paper);border-color:var(--denim);}
+  .row2{display:flex;gap:10px;}
+  .row2 .field{flex:1;}
+  .sheet-actions{display:flex;gap:10px;margin-top:6px;}
+  .btn{
+    flex:1;padding:12px;border-radius:5px;font-family:inherit;font-size:15px;
+    border:1px solid var(--ink);cursor:pointer;
+  }
+  .btn.primary{background:var(--ink);color:var(--paper);}
+  .btn.ghost{background:none;color:var(--ink);}
+
+  .sheet .warn{font-size:12.5px;color:var(--thread);margin-bottom:12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Stock Ledger</h1>
+    <div class="sub">clothing stock</div>
+  </header>
+
+  <div class="sold-line">
+    <span>Sold today — <strong id="soldToday">0</strong> piece(s)</span>
+    <div class="backup-links">
+      <button class="linklike" id="exportBtn">Export backup</button>
+      <button class="linklike" id="importBtn">Import backup</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none">
+    </div>
+  </div>
+
+  <div class="search-row">
+    <input type="text" id="searchInput" placeholder="Search this category by name, size, or color">
+  </div>
+
+  <div class="threshold-row">
+    <label for="thresholdInput">Flag low stock at or below</label>
+    <input type="number" id="thresholdInput" min="0" value="5">
+    <span>pieces</span>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+  <div class="summary-line" id="summaryLine"></div>
+  <div id="list"></div>
+</div>
+
+<button class="fab" id="fabAdd" title="Add clothing">+</button>
+
+<div class="overlay" id="overlay">
+  <div class="sheet">
+    <h2 id="sheetTitle">New item</h2>
+    <div class="field">
+      <label>Category</label>
+      <div class="cat-grid" id="catGrid"></div>
+    </div>
+    <div class="field">
+      <label>Name or number</label>
+      <input type="text" id="fName" placeholder="e.g. Plop jacket, or code #12">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Size</label>
+        <input type="text" id="fSize" placeholder="e.g. M, 42">
+      </div>
+      <div class="field">
+        <label>Color</label>
+        <input type="text" id="fColor" placeholder="e.g. Black">
+      </div>
+    </div>
+    <div class="field">
+      <label>How many pieces</label>
+      <input type="number" id="fQty" min="0" value="1" inputmode="numeric">
+    </div>
+    <div class="sheet-actions">
+      <button class="btn ghost" id="cancelBtn">Cancel</button>
+      <button class="btn primary" id="saveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="importOverlay">
+  <div class="sheet">
+    <h2>Restore from backup</h2>
+    <p class="warn">This replaces everything currently in the ledger with the contents of the backup file. This can't be undone.</p>
+    <div class="sheet-actions">
+      <button class="btn ghost" id="importCancelBtn">Cancel</button>
+      <button class="btn primary" id="importConfirmBtn">Replace with backup</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var CATS = ["Pantol","Aze","Chaket","Qat","Blus"];
+  var STORE_KEY = "clothes_inventory_v1";
+  var THRESHOLD_KEY = "clothes_inventory_threshold_v1";
+  var SOLD_KEY = "clothes_inventory_sold_v1";
+
+  var data = [];
+  var threshold = 5;
+  var soldLog = { date: "", count: 0 };
+  var activeCat = CATS[0];
+  var searchTerm = "";
+  var editingId = null;
+  var pendingImportPayload = null;
+
+  function todayStr(){
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  }
+
+  function load(){
+    try{
+      var raw = localStorage.getItem(STORE_KEY);
+      data = raw ? JSON.parse(raw) : [];
+    }catch(e){ data = []; }
+    try{
+      var t = localStorage.getItem(THRESHOLD_KEY);
+      threshold = t !== null ? parseInt(t,10) : 5;
+      if(isNaN(threshold)) threshold = 5;
+    }catch(e){ threshold = 5; }
+    try{
+      var raw2 = localStorage.getItem(SOLD_KEY);
+      soldLog = raw2 ? JSON.parse(raw2) : { date: todayStr(), count: 0 };
+    }catch(e){ soldLog = { date: todayStr(), count: 0 }; }
+    if(soldLog.date !== todayStr()){
+      soldLog = { date: todayStr(), count: 0 };
+      saveSold();
+    }
+  }
+  function save(){
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(data)); }
+    catch(e){ console.error("could not save", e); }
+  }
+  function saveThreshold(){
+    try{ localStorage.setItem(THRESHOLD_KEY, String(threshold)); }
+    catch(e){ console.error("could not save threshold", e); }
+  }
+  function saveSold(){
+    try{ localStorage.setItem(SOLD_KEY, JSON.stringify(soldLog)); }
+    catch(e){ console.error("could not save sold log", e); }
+  }
+
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+  function renderTabs(){
+    var tabs = document.getElementById("tabs");
+    tabs.innerHTML = "";
+    CATS.forEach(function(cat){
+      var count = data.filter(function(d){return d.cat===cat;})
+                       .reduce(function(s,d){return s+d.qty;},0);
+      var b = document.createElement("button");
+      b.className = "tab" + (cat===activeCat ? " active" : "");
+      b.innerHTML = cat + ' <span class="count">' + count + '</span>';
+      b.onclick = function(){ activeCat = cat; renderAll(); };
+      tabs.appendChild(b);
+    });
+  }
+
+  function currentItems(){
+    var items = data.filter(function(d){return d.cat===activeCat;});
+    if(searchTerm.trim()){
+      var q = searchTerm.trim().toLowerCase();
+      items = items.filter(function(d){
+        return (d.name||"").toLowerCase().indexOf(q) !== -1 ||
+               (d.size||"").toLowerCase().indexOf(q) !== -1 ||
+               (d.color||"").toLowerCase().indexOf(q) !== -1;
+      });
+    }
+    return items;
+  }
+
+  function renderSummary(){
+    var items = currentItems();
+    var pieces = items.reduce(function(s,d){return s+d.qty;},0);
+    var line = document.getElementById("summaryLine");
+    line.innerHTML = "<span>" + items.length + " item" + (items.length===1?"":"s") + "</span><span>" + pieces + " piece" + (pieces===1?"":"s") + " total</span>";
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function renderList(){
+    var list = document.getElementById("list");
+    var items = currentItems();
+    list.innerHTML = "";
+    if(items.length === 0){
+      var e = document.createElement("div");
+      e.className = "empty";
+      e.textContent = searchTerm.trim()
+        ? "No matches in " + activeCat + " for \"" + searchTerm.trim() + "\"."
+        : "Nothing filed under " + activeCat + " yet. Tap + to add the first piece.";
+      list.appendChild(e);
+      return;
+    }
+    items.forEach(function(it){
+      var row = document.createElement("div");
+      row.className = "item";
+
+      var info = document.createElement("div");
+      info.className = "info";
+      info.onclick = function(){ openSheet(it.id); };
+      var name = document.createElement("p");
+      name.className = "name";
+      name.textContent = it.name;
+      var meta = document.createElement("div");
+      meta.className = "meta";
+      var parts = [];
+      if(it.size) parts.push("<span>Size " + escapeHtml(it.size) + "</span>");
+      if(it.color) parts.push("<span>" + escapeHtml(it.color) + "</span>");
+      meta.innerHTML = parts.join("");
+      info.appendChild(name);
+      info.appendChild(meta);
+
+      var qtyBlock = document.createElement("div");
+      qtyBlock.className = "qty-block";
+
+      var stepper = document.createElement("div");
+      stepper.className = "stepper";
+      var plus = document.createElement("button");
+      plus.className = "stepbtn plus";
+      plus.textContent = "+";
+      plus.onclick = function(){ changeQty(it.id, 1); };
+      var minus = document.createElement("button");
+      minus.className = "stepbtn minus";
+      minus.textContent = "\u2013";
+      minus.onclick = function(){ changeQty(it.id, -1); };
+      stepper.appendChild(plus);
+      stepper.appendChild(minus);
+
+      var num = document.createElement("div");
+      num.className = "qty-num" + (it.qty<=threshold ? " low" : "");
+      num.textContent = it.qty;
+
+      qtyBlock.appendChild(num);
+      qtyBlock.appendChild(stepper);
+
+      row.appendChild(info);
+      row.appendChild(qtyBlock);
+
+      var rowActions = document.createElement("div");
+      rowActions.className = "row-actions";
+
+      var editBtn = document.createElement("button");
+      editBtn.className = "editbtn";
+      editBtn.textContent = "edit";
+      editBtn.onclick = function(){ openSheet(it.id); };
+
+      var delBtn = document.createElement("button");
+      delBtn.className = "del";
+      delBtn.textContent = "remove";
+      delBtn.onclick = function(){
+        if(confirm('Remove "' + it.name + '" from the ledger?')){
+          data = data.filter(function(d){return d.id!==it.id;});
+          save(); renderAll();
+        }
+      };
+
+      rowActions.appendChild(editBtn);
+      rowActions.appendChild(delBtn);
+      row.appendChild(rowActions);
+
+      list.appendChild(row);
+    });
+  }
+
+  function changeQty(id, delta){
+    var it = data.find(function(d){return d.id===id;});
+    if(!it) return;
+    var before = it.qty;
+    it.qty = Math.max(0, it.qty + delta);
+    if(delta < 0 && before > it.qty){
+      soldLog.count += (before - it.qty);
+      saveSold();
+      renderSoldToday();
+    }
+    save();
+    renderList();
+    renderTabs();
+    renderSummary();
+  }
+
+  function renderSoldToday(){
+    document.getElementById("soldToday").textContent = soldLog.count;
+  }
+
+  function renderAll(){
+    renderTabs();
+    renderSummary();
+    renderList();
+    renderSoldToday();
+  }
+
+  // --- add / edit sheet ---
+  var overlay = document.getElementById("overlay");
+  var catGrid = document.getElementById("catGrid");
+  var pickedCat = CATS[0];
+
+  function buildCatGrid(){
+    catGrid.innerHTML = "";
+    CATS.forEach(function(cat){
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "cat-pick" + (cat===pickedCat ? " sel" : "");
+      b.textContent = cat;
+      b.onclick = function(){
+        pickedCat = cat;
+        Array.prototype.forEach.call(catGrid.children, function(c){ c.classList.remove("sel"); });
+        b.classList.add("sel");
+      };
+      catGrid.appendChild(b);
+    });
+  }
+
+  function openSheet(id){
+    editingId = id || null;
+    var editing = editingId ? data.find(function(d){return d.id===editingId;}) : null;
+    pickedCat = editing ? editing.cat : activeCat;
+    buildCatGrid();
+    document.getElementById("sheetTitle").textContent = editing ? "Edit item" : "New item";
+    document.getElementById("fName").value = editing ? editing.name : "";
+    document.getElementById("fSize").value = editing ? editing.size : "";
+    document.getElementById("fColor").value = editing ? editing.color : "";
+    document.getElementById("fQty").value = editing ? editing.qty : "1";
+    overlay.classList.add("show");
+  }
+  function closeSheet(){ overlay.classList.remove("show"); editingId = null; }
+
+  document.getElementById("fabAdd").onclick = function(){ openSheet(null); };
+  document.getElementById("cancelBtn").onclick = closeSheet;
+  overlay.onclick = function(e){ if(e.target === overlay) closeSheet(); };
+
+  document.getElementById("saveBtn").onclick = function(){
+    var name = document.getElementById("fName").value.trim();
+    var size = document.getElementById("fSize").value.trim();
+    var color = document.getElementById("fColor").value.trim();
+    var qty = parseInt(document.getElementById("fQty").value, 10);
+    if(!name){
+      alert("Give this piece a name or number first.");
+      return;
+    }
+    if(isNaN(qty) || qty < 0) qty = 0;
+    if(editingId){
+      var it = data.find(function(d){return d.id===editingId;});
+      if(it){
+        it.cat = pickedCat; it.name = name; it.size = size; it.color = color; it.qty = qty;
+      }
+    }else{
+      data.push({ id: uid(), cat: pickedCat, name: name, size: size, color: color, qty: qty });
+    }
+    save();
+    activeCat = pickedCat;
+    closeSheet();
+    renderAll();
+  };
+
+  // --- search ---
+  document.getElementById("searchInput").addEventListener("input", function(e){
+    searchTerm = e.target.value;
+    renderSummary();
+    renderList();
+  });
+
+  // --- threshold ---
+  var thresholdInput = document.getElementById("thresholdInput");
+  thresholdInput.addEventListener("change", function(e){
+    var v = parseInt(e.target.value, 10);
+    threshold = isNaN(v) || v < 0 ? 0 : v;
+    thresholdInput.value = threshold;
+    saveThreshold();
+    renderList();
+  });
+
+  // --- backup / restore ---
+  document.getElementById("exportBtn").onclick = function(){
+    var payload = {
+      exportedAt: new Date().toISOString(),
+      data: data,
+      threshold: threshold,
+      soldLog: soldLog
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "stock-ledger-backup-" + todayStr() + ".json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+  };
+
+  var importFile = document.getElementById("importFile");
+  var importOverlay = document.getElementById("importOverlay");
+  document.getElementById("importBtn").onclick = function(){ importFile.click(); };
+  importFile.addEventListener("change", function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var parsed = JSON.parse(ev.target.result);
+        if(!parsed || !Array.isArray(parsed.data)){
+          alert("This doesn't look like a Stock Ledger backup file.");
+          return;
+        }
+        pendingImportPayload = parsed;
+        importOverlay.classList.add("show");
+      }catch(err){
+        alert("Could not read that file. Make sure it's a Stock Ledger backup.");
+      }
+    };
+    reader.readAsText(file);
+    importFile.value = "";
+  });
+  document.getElementById("importCancelBtn").onclick = function(){
+    pendingImportPayload = null;
+    importOverlay.classList.remove("show");
+  };
+  document.getElementById("importConfirmBtn").onclick = function(){
+    if(!pendingImportPayload) return;
+    data = pendingImportPayload.data || [];
+    if(typeof pendingImportPayload.threshold === "number") threshold = pendingImportPayload.threshold;
+    if(pendingImportPayload.soldLog && pendingImportPayload.soldLog.date === todayStr()){
+      soldLog = pendingImportPayload.soldLog;
+    }
+    save(); saveThreshold(); saveSold();
+    thresholdInput.value = threshold;
+    pendingImportPayload = null;
+    importOverlay.classList.remove("show");
+    renderAll();
+  };
+
+  load();
+  thresholdInput.value = threshold;
+  renderAll();
+})();
+</script>
+</body>
+</html>
