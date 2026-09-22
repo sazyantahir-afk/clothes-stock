@@ -6,11 +6,11 @@
 <meta name="color-scheme" content="light">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Stock Ledger">
+<meta name="apple-mobile-web-app-title" content="by_marlin">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#FFFFFF">
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%23FFFFFF'/%3E%3Crect x='6' y='6' width='168' height='168' fill='none' stroke='%23000000' stroke-width='4'/%3E%3Ctext x='90' y='108' font-family='Georgia,serif' font-size='64' fill='%23000000' text-anchor='middle'%3ESL%3C/text%3E%3C/svg%3E">
-<title>Stock Ledger</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%23FFFFFF'/%3E%3Crect x='6' y='6' width='168' height='168' fill='none' stroke='%23000000' stroke-width='4'/%3E%3Ctext x='90' y='108' font-family='Georgia,serif' font-size='64' fill='%23000000' text-anchor='middle'%3EBM%3C/text%3E%3C/svg%3E">
+<title>by_marlin</title>
 <style>
   :root{
     color-scheme: light;
@@ -223,7 +223,7 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <h1>Stock Ledger</h1>
+    <h1>by_marlin</h1>
     <div class="sub">clothing stock</div>
   </header>
 
@@ -611,13 +611,13 @@
       try{
         var parsed = JSON.parse(ev.target.result);
         if(!parsed || !Array.isArray(parsed.data)){
-          alert("This doesn't look like a Stock Ledger backup file.");
+          alert("This doesn't look like a by_marlin backup file.");
           return;
         }
         pendingImportPayload = parsed;
         importOverlay.classList.add("show");
       }catch(err){
-        alert("Could not read that file. Make sure it's a Stock Ledger backup.");
+        alert("Could not read that file. Make sure it's a by_marlin backup.");
       }
     };
     reader.readAsText(file);
