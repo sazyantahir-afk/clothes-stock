@@ -11,6 +11,8 @@
 <meta name="theme-color" content="#FFFFFF">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%23FFFFFF'/%3E%3Crect x='6' y='6' width='168' height='168' fill='none' stroke='%23000000' stroke-width='4'/%3E%3Ctext x='90' y='108' font-family='Georgia,serif' font-size='64' fill='%23000000' text-anchor='middle'%3EBM%3C/text%3E%3C/svg%3E">
 <title>by_marlin</title>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <style>
   :root{
     color-scheme: light;
@@ -24,6 +26,7 @@
     --thread:#A73E36;
     --tag:#C68A2E;
     --card:#FAF3E2;
+    --ok:#4B7A4B;
     box-sizing:border-box;
     padding-top:env(safe-area-inset-top,0px);
     padding-bottom:env(safe-area-inset-bottom,0px);
@@ -50,7 +53,10 @@
   header.top h1{
     font-size:26px;margin:0;font-weight:400;letter-spacing:0.2px;
   }
-  header.top .sub{font-size:13px;color:var(--ink-soft);font-style:italic;}
+  header.top .sub{font-size:12.5px;color:var(--ink-soft);font-style:italic;text-align:right;}
+  header.top .sub .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;background:var(--ink-soft);}
+  header.top .sub.synced .dot{background:var(--ok);}
+  header.top .sub.offline .dot{background:var(--thread);}
 
   .sold-line{
     font-size:13px;color:var(--ink-soft);
@@ -216,6 +222,7 @@
   }
   .btn.primary{background:var(--ink);color:var(--paper);}
   .btn.ghost{background:none;color:var(--ink);}
+  .btn:disabled{opacity:0.5;cursor:default;}
 
   .sheet .warn{font-size:12.5px;color:var(--thread);margin-bottom:12px;}
 </style>
@@ -224,7 +231,7 @@
 <div class="wrap">
   <header class="top">
     <h1>by_marlin</h1>
-    <div class="sub">clothing stock</div>
+    <div class="sub" id="syncStatus"><span class="dot"></span><span id="syncText">Connecting…</span></div>
   </header>
 
   <div class="sold-line">
@@ -288,7 +295,7 @@
 <div class="overlay" id="importOverlay">
   <div class="sheet">
     <h2>Restore from backup</h2>
-    <p class="warn">This replaces everything currently in the ledger with the contents of the backup file. This can't be undone.</p>
+    <p class="warn">This replaces everything currently in the shared ledger — on every device — with the contents of the backup file. This can't be undone.</p>
     <div class="sheet-actions">
       <button class="btn ghost" id="importCancelBtn">Cancel</button>
       <button class="btn primary" id="importConfirmBtn">Replace with backup</button>
@@ -297,55 +304,43 @@
 </div>
 
 <script>
+  // ---- Firebase setup ----
+  var firebaseConfig = {
+    apiKey: "AIzaSyCf1wNTFn8t0EACmEcfDxo59x7X7GwwPDM",
+    authDomain: "by-marlin.firebaseapp.com",
+    projectId: "by-marlin",
+    storageBucket: "by-marlin.firebasestorage.app",
+    messagingSenderId: "109168926931",
+    appId: "1:109168926931:web:6248778f9985c03134f426"
+  };
+  firebase.initializeApp(firebaseConfig);
+  var db = firebase.firestore();
+  var FieldValue = firebase.firestore.FieldValue;
+</script>
+
+<script>
 (function(){
   var CATS = ["Pantol","Aze","Chaket","Qat","Blus"];
-  var STORE_KEY = "clothes_inventory_v1";
-  var THRESHOLD_KEY = "clothes_inventory_threshold_v1";
-  var SOLD_KEY = "clothes_inventory_sold_v1";
 
-  var data = [];
+  var data = [];          // mirror of the "items" collection, kept live by onSnapshot
   var threshold = 5;
-  var soldLog = { date: "", count: 0 };
+  var soldCount = 0;
   var activeCat = CATS[0];
   var searchTerm = "";
   var editingId = null;
   var pendingImportPayload = null;
+  var gotFirstItemsSnapshot = false;
 
   function todayStr(){
     var d = new Date();
     return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
   }
 
-  function load(){
-    try{
-      var raw = localStorage.getItem(STORE_KEY);
-      data = raw ? JSON.parse(raw) : [];
-    }catch(e){ data = []; }
-    try{
-      var t = localStorage.getItem(THRESHOLD_KEY);
-      threshold = t !== null ? parseInt(t,10) : 5;
-      if(isNaN(threshold)) threshold = 5;
-    }catch(e){ threshold = 5; }
-    try{
-      var raw2 = localStorage.getItem(SOLD_KEY);
-      soldLog = raw2 ? JSON.parse(raw2) : { date: todayStr(), count: 0 };
-    }catch(e){ soldLog = { date: todayStr(), count: 0 }; }
-    if(soldLog.date !== todayStr()){
-      soldLog = { date: todayStr(), count: 0 };
-      saveSold();
-    }
-  }
-  function save(){
-    try{ localStorage.setItem(STORE_KEY, JSON.stringify(data)); }
-    catch(e){ console.error("could not save", e); }
-  }
-  function saveThreshold(){
-    try{ localStorage.setItem(THRESHOLD_KEY, String(threshold)); }
-    catch(e){ console.error("could not save threshold", e); }
-  }
-  function saveSold(){
-    try{ localStorage.setItem(SOLD_KEY, JSON.stringify(soldLog)); }
-    catch(e){ console.error("could not save sold log", e); }
+  function setSyncStatus(state, text){
+    var el = document.getElementById("syncStatus");
+    el.classList.remove("synced","offline");
+    if(state) el.classList.add(state);
+    document.getElementById("syncText").textContent = text;
   }
 
   function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -355,11 +350,11 @@
     tabs.innerHTML = "";
     CATS.forEach(function(cat){
       var count = data.filter(function(d){return d.cat===cat;})
-                       .reduce(function(s,d){return s+d.qty;},0);
+                       .reduce(function(s,d){return s+(d.qty||0);},0);
       var b = document.createElement("button");
       b.className = "tab" + (cat===activeCat ? " active" : "");
       b.innerHTML = cat + ' <span class="count">' + count + '</span>';
-      b.onclick = function(){ activeCat = cat; renderAll(); };
+      b.onclick = function(){ activeCat = cat; renderTabs(); renderSummary(); renderList(); };
       tabs.appendChild(b);
     });
   }
@@ -379,7 +374,7 @@
 
   function renderSummary(){
     var items = currentItems();
-    var pieces = items.reduce(function(s,d){return s+d.qty;},0);
+    var pieces = items.reduce(function(s,d){return s+(d.qty||0);},0);
     var line = document.getElementById("summaryLine");
     line.innerHTML = "<span>" + items.length + " item" + (items.length===1?"":"s") + "</span><span>" + pieces + " piece" + (pieces===1?"":"s") + " total</span>";
   }
@@ -394,6 +389,13 @@
     var list = document.getElementById("list");
     var items = currentItems();
     list.innerHTML = "";
+    if(!gotFirstItemsSnapshot){
+      var loading = document.createElement("div");
+      loading.className = "empty";
+      loading.textContent = "Loading the shared ledger…";
+      list.appendChild(loading);
+      return;
+    }
     if(items.length === 0){
       var e = document.createElement("div");
       e.className = "empty";
@@ -439,8 +441,8 @@
       stepper.appendChild(minus);
 
       var num = document.createElement("div");
-      num.className = "qty-num" + (it.qty<=threshold ? " low" : "");
-      num.textContent = it.qty;
+      num.className = "qty-num" + ((it.qty||0)<=threshold ? " low" : "");
+      num.textContent = it.qty||0;
 
       qtyBlock.appendChild(num);
       qtyBlock.appendChild(stepper);
@@ -460,9 +462,10 @@
       delBtn.className = "del";
       delBtn.textContent = "remove";
       delBtn.onclick = function(){
-        if(confirm('Remove "' + it.name + '" from the ledger?')){
-          data = data.filter(function(d){return d.id!==it.id;});
-          save(); renderAll();
+        if(confirm('Remove "' + it.name + '" from the ledger? This removes it for everyone.')){
+          db.collection("items").doc(it.id).delete().catch(function(err){
+            alert("Could not remove this item. Check your connection and try again.");
+          });
         }
       };
 
@@ -477,28 +480,23 @@
   function changeQty(id, delta){
     var it = data.find(function(d){return d.id===id;});
     if(!it) return;
-    var before = it.qty;
-    it.qty = Math.max(0, it.qty + delta);
-    if(delta < 0 && before > it.qty){
-      soldLog.count += (before - it.qty);
-      saveSold();
-      renderSoldToday();
+    var before = it.qty||0;
+    var after = Math.max(0, before + delta);
+    if(after === before) return;
+    db.collection("items").doc(id).update({ qty: after }).catch(function(){
+      alert("Could not update the count. Check your connection and try again.");
+    });
+    if(delta < 0 && before > after){
+      var sold = before - after;
+      db.collection("soldLog").doc(todayStr()).set({
+        date: todayStr(),
+        count: FieldValue.increment(sold)
+      }, { merge: true }).catch(function(){});
     }
-    save();
-    renderList();
-    renderTabs();
-    renderSummary();
   }
 
   function renderSoldToday(){
-    document.getElementById("soldToday").textContent = soldLog.count;
-  }
-
-  function renderAll(){
-    renderTabs();
-    renderSummary();
-    renderList();
-    renderSoldToday();
+    document.getElementById("soldToday").textContent = soldCount;
   }
 
   // --- add / edit sheet ---
@@ -550,18 +548,20 @@
       return;
     }
     if(isNaN(qty) || qty < 0) qty = 0;
-    if(editingId){
-      var it = data.find(function(d){return d.id===editingId;});
-      if(it){
-        it.cat = pickedCat; it.name = name; it.size = size; it.color = color; it.qty = qty;
-      }
-    }else{
-      data.push({ id: uid(), cat: pickedCat, name: name, size: size, color: color, qty: qty });
-    }
-    save();
-    activeCat = pickedCat;
-    closeSheet();
-    renderAll();
+    var saveBtn = document.getElementById("saveBtn");
+    saveBtn.disabled = true;
+    var payload = { cat: pickedCat, name: name, size: size, color: color, qty: qty };
+    var op = editingId
+      ? db.collection("items").doc(editingId).update(payload)
+      : db.collection("items").add(payload);
+    op.then(function(){
+      activeCat = pickedCat;
+      closeSheet();
+      saveBtn.disabled = false;
+    }).catch(function(){
+      saveBtn.disabled = false;
+      alert("Could not save. Check your connection and try again.");
+    });
   };
 
   // --- search ---
@@ -571,29 +571,30 @@
     renderList();
   });
 
-  // --- threshold ---
+  // --- threshold (shared setting) ---
   var thresholdInput = document.getElementById("thresholdInput");
   thresholdInput.addEventListener("change", function(e){
     var v = parseInt(e.target.value, 10);
-    threshold = isNaN(v) || v < 0 ? 0 : v;
-    thresholdInput.value = threshold;
-    saveThreshold();
-    renderList();
+    var t = isNaN(v) || v < 0 ? 0 : v;
+    thresholdInput.value = t;
+    db.collection("settings").doc("app").set({ threshold: t }, { merge: true }).catch(function(){
+      alert("Could not save the threshold. Check your connection and try again.");
+    });
   });
 
   // --- backup / restore ---
   document.getElementById("exportBtn").onclick = function(){
     var payload = {
       exportedAt: new Date().toISOString(),
-      data: data,
+      data: data.map(function(d){ return { cat:d.cat, name:d.name, size:d.size, color:d.color, qty:d.qty }; }),
       threshold: threshold,
-      soldLog: soldLog
+      soldLog: { date: todayStr(), count: soldCount }
     };
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
     a.href = url;
-    a.download = "stock-ledger-backup-" + todayStr() + ".json";
+    a.download = "by-marlin-backup-" + todayStr() + ".json";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -629,21 +630,62 @@
   };
   document.getElementById("importConfirmBtn").onclick = function(){
     if(!pendingImportPayload) return;
-    data = pendingImportPayload.data || [];
-    if(typeof pendingImportPayload.threshold === "number") threshold = pendingImportPayload.threshold;
-    if(pendingImportPayload.soldLog && pendingImportPayload.soldLog.date === todayStr()){
-      soldLog = pendingImportPayload.soldLog;
-    }
-    save(); saveThreshold(); saveSold();
-    thresholdInput.value = threshold;
-    pendingImportPayload = null;
-    importOverlay.classList.remove("show");
-    renderAll();
+    var confirmBtn = document.getElementById("importConfirmBtn");
+    confirmBtn.disabled = true;
+    db.collection("items").get().then(function(snapshot){
+      var batch = db.batch();
+      snapshot.docs.forEach(function(doc){ batch.delete(doc.ref); });
+      (pendingImportPayload.data || []).forEach(function(item){
+        var ref = db.collection("items").doc();
+        batch.set(ref, {
+          cat: item.cat, name: item.name, size: item.size || "",
+          color: item.color || "", qty: item.qty || 0
+        });
+      });
+      if(typeof pendingImportPayload.threshold === "number"){
+        batch.set(db.collection("settings").doc("app"), { threshold: pendingImportPayload.threshold }, { merge: true });
+      }
+      return batch.commit();
+    }).then(function(){
+      confirmBtn.disabled = false;
+      pendingImportPayload = null;
+      importOverlay.classList.remove("show");
+    }).catch(function(){
+      confirmBtn.disabled = false;
+      alert("Could not restore the backup. Check your connection and try again.");
+    });
   };
 
-  load();
-  thresholdInput.value = threshold;
-  renderAll();
+  // --- live sync listeners ---
+  db.collection("items").onSnapshot(function(snapshot){
+    data = snapshot.docs.map(function(doc){
+      var d = doc.data();
+      return { id: doc.id, cat: d.cat, name: d.name, size: d.size||"", color: d.color||"", qty: d.qty||0 };
+    });
+    gotFirstItemsSnapshot = true;
+    setSyncStatus("synced", "Synced");
+    renderTabs();
+    renderSummary();
+    renderList();
+  }, function(err){
+    setSyncStatus("offline", "Offline — changes will resume when reconnected");
+  });
+
+  db.collection("settings").doc("app").onSnapshot(function(doc){
+    threshold = (doc.exists && typeof doc.data().threshold === "number") ? doc.data().threshold : 5;
+    thresholdInput.value = threshold;
+    renderList();
+  });
+
+  db.collection("soldLog").doc(todayStr()).onSnapshot(function(doc){
+    soldCount = (doc.exists && doc.data().count) ? doc.data().count : 0;
+    renderSoldToday();
+  });
+
+  renderTabs();
+  renderSummary();
+  renderList();
+  renderSoldToday();
 })();
 </script>
 </body>
