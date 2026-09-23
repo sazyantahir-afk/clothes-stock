@@ -225,6 +225,34 @@
   .btn:disabled{opacity:0.5;cursor:default;}
 
   .sheet .warn{font-size:12.5px;color:var(--thread);margin-bottom:12px;}
+
+  .tab.edit-cats{
+    border:1px dashed var(--ink-soft);border-radius:4px;
+    margin:4px 0 4px 6px;color:var(--ink-soft);font-size:13px;
+    padding:7px 12px;
+  }
+  .add-cat-row{display:flex;gap:10px;margin-bottom:16px;}
+  .add-cat-row input{
+    flex:1;padding:10px 11px;font-family:inherit;font-size:15px;
+    border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--ink);
+  }
+  .add-cat-row input:focus{outline:2px solid var(--denim);outline-offset:1px;}
+  .add-cat-row button{
+    flex:0 0 auto;padding:10px 16px;border-radius:5px;font-family:inherit;font-size:14px;
+    border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;
+  }
+  .cat-edit-row{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 0;border-bottom:1px solid var(--line);gap:10px;
+  }
+  .cat-edit-row .cname{font-size:15px;flex:1;min-width:0;}
+  .cat-edit-row .cactions{display:flex;gap:14px;flex:0 0 auto;}
+  .cat-edit-row .cactions button{
+    background:none;border:none;font-family:inherit;font-size:13px;
+    color:var(--denim);text-decoration:underline;text-underline-offset:2px;
+    cursor:pointer;padding:0;
+  }
+  .cat-edit-row .cactions button.remove{color:var(--thread);}
 </style>
 </head>
 <body>
@@ -303,6 +331,20 @@
   </div>
 </div>
 
+<div class="overlay" id="catsOverlay">
+  <div class="sheet">
+    <h2>Edit categories</h2>
+    <div class="add-cat-row">
+      <input type="text" id="newCatInput" placeholder="e.g. Cables">
+      <button id="addCatBtn">Add</button>
+    </div>
+    <div id="catsList"></div>
+    <div class="sheet-actions">
+      <button class="btn ghost" id="catsCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // ---- Firebase setup ----
   var firebaseConfig = {
@@ -320,12 +362,13 @@
 
 <script>
 (function(){
-  var CATS = ["Pantol","Aze","Chaket","Qat","Blus"];
+  var DEFAULT_CATS = ["Pantol","Aze","Chaket","Qat","Blus"];
+  var CATS = [];   // shared category list, loaded (and kept live) from settings/app
 
   var data = [];          // mirror of the "items" collection, kept live by onSnapshot
   var threshold = 5;
   var soldCount = 0;
-  var activeCat = CATS[0];
+  var activeCat = null;
   var searchTerm = "";
   var editingId = null;
   var pendingImportPayload = null;
@@ -357,6 +400,12 @@
       b.onclick = function(){ activeCat = cat; renderTabs(); renderSummary(); renderList(); };
       tabs.appendChild(b);
     });
+    var editBtn = document.createElement("button");
+    editBtn.className = "tab edit-cats";
+    editBtn.type = "button";
+    editBtn.textContent = "\u270E Edit categories";
+    editBtn.onclick = function(){ openCatsOverlay(); };
+    tabs.appendChild(editBtn);
   }
 
   function currentItems(){
@@ -502,7 +551,7 @@
   // --- add / edit sheet ---
   var overlay = document.getElementById("overlay");
   var catGrid = document.getElementById("catGrid");
-  var pickedCat = CATS[0];
+  var pickedCat = null;
 
   function buildCatGrid(){
     catGrid.innerHTML = "";
@@ -533,6 +582,123 @@
     overlay.classList.add("show");
   }
   function closeSheet(){ overlay.classList.remove("show"); editingId = null; }
+
+  // --- category management ---
+  var catsOverlay = document.getElementById("catsOverlay");
+  var newCatInput = document.getElementById("newCatInput");
+
+  function openCatsOverlay(){
+    newCatInput.value = "";
+    renderCatsList();
+    catsOverlay.classList.add("show");
+  }
+  function closeCatsOverlay(){ catsOverlay.classList.remove("show"); }
+
+  function renderCatsList(){
+    var wrap = document.getElementById("catsList");
+    wrap.innerHTML = "";
+    CATS.forEach(function(cat){
+      var count = data.filter(function(d){return d.cat===cat;}).length;
+      var row = document.createElement("div");
+      row.className = "cat-edit-row";
+
+      var name = document.createElement("span");
+      name.className = "cname";
+      name.textContent = cat + " (" + count + ")";
+
+      var actions = document.createElement("div");
+      actions.className = "cactions";
+      var renameBtn = document.createElement("button");
+      renameBtn.type = "button";
+      renameBtn.textContent = "Rename";
+      renameBtn.onclick = function(){ renameCategory(cat); };
+      var removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "remove";
+      removeBtn.textContent = "Remove";
+      removeBtn.onclick = function(){ removeCategory(cat); };
+      actions.appendChild(renameBtn);
+      actions.appendChild(removeBtn);
+
+      row.appendChild(name);
+      row.appendChild(actions);
+      wrap.appendChild(row);
+    });
+  }
+
+  function saveCategories(newCats){
+    return db.collection("settings").doc("app").set({ categories: newCats }, { merge: true });
+  }
+
+  function addCategory(){
+    var name = newCatInput.value.trim();
+    if(!name) return;
+    if(CATS.some(function(c){ return c.toLowerCase()===name.toLowerCase(); })){
+      alert('"' + name + '" already exists.');
+      return;
+    }
+    var newCats = CATS.concat([name]);
+    saveCategories(newCats).then(function(){
+      newCatInput.value = "";
+      activeCat = name;
+    }).catch(function(){
+      alert("Could not add the category. Check your connection and try again.");
+    });
+  }
+
+  function renameCategory(oldName){
+    var newName = prompt('Rename "' + oldName + '" to:', oldName);
+    if(newName === null) return;
+    newName = newName.trim();
+    if(!newName){ alert("Category name can't be empty."); return; }
+    if(newName === oldName) return;
+    if(CATS.some(function(c){ return c.toLowerCase()===newName.toLowerCase() && c!==oldName; })){
+      alert('A category named "' + newName + '" already exists.');
+      return;
+    }
+    var newCats = CATS.map(function(c){ return c===oldName ? newName : c; });
+    var affected = data.filter(function(d){ return d.cat===oldName; });
+    var batch = db.batch();
+    affected.forEach(function(it){
+      batch.update(db.collection("items").doc(it.id), { cat: newName });
+    });
+    batch.set(db.collection("settings").doc("app"), { categories: newCats }, { merge: true });
+    batch.commit().then(function(){
+      if(activeCat === oldName) activeCat = newName;
+      renderCatsList();
+    }).catch(function(){
+      alert("Could not rename the category. Check your connection and try again.");
+    });
+  }
+
+  function removeCategory(name){
+    var count = data.filter(function(d){ return d.cat===name; }).length;
+    if(count > 0){
+      alert('"' + name + '" still has ' + count + ' item' + (count===1?"":"s") + '. Move ' +
+        (count===1?"it":"them") + ' to another category (Edit on the item, then pick a new category), or delete ' +
+        (count===1?"it":"them") + ' first.');
+      return;
+    }
+    if(CATS.length <= 1){
+      alert("You need at least one category.");
+      return;
+    }
+    if(!confirm('Remove the category "' + name + '"? It\'s empty, so this is safe.')) return;
+    var newCats = CATS.filter(function(c){ return c!==name; });
+    saveCategories(newCats).then(function(){
+      if(activeCat === name) activeCat = newCats[0];
+      renderCatsList();
+    }).catch(function(){
+      alert("Could not remove the category. Check your connection and try again.");
+    });
+  }
+
+  document.getElementById("addCatBtn").onclick = addCategory;
+  newCatInput.addEventListener("keydown", function(e){
+    if(e.key === "Enter"){ e.preventDefault(); addCategory(); }
+  });
+  document.getElementById("catsCloseBtn").onclick = closeCatsOverlay;
+  catsOverlay.onclick = function(e){ if(e.target === catsOverlay) closeCatsOverlay(); };
 
   document.getElementById("fabAdd").onclick = function(){ openSheet(null); };
   document.getElementById("cancelBtn").onclick = closeSheet;
@@ -672,8 +838,20 @@
   });
 
   db.collection("settings").doc("app").onSnapshot(function(doc){
-    threshold = (doc.exists && typeof doc.data().threshold === "number") ? doc.data().threshold : 5;
+    var d = doc.exists ? doc.data() : {};
+    threshold = typeof d.threshold === "number" ? d.threshold : 5;
     thresholdInput.value = threshold;
+
+    if(Array.isArray(d.categories) && d.categories.length){
+      CATS = d.categories;
+    } else if(CATS.length === 0){
+      CATS = DEFAULT_CATS.slice();
+      saveCategories(CATS).catch(function(){});
+    }
+    if(CATS.indexOf(activeCat) === -1) activeCat = CATS[0] || null;
+
+    renderTabs();
+    renderSummary();
     renderList();
   });
 
