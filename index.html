@@ -627,7 +627,7 @@
   }
 
   function saveCategories(newCats){
-    return db.collection("settings").doc("app").set({ categories: newCats }, { merge: true });
+    return db.collection("settings").doc("clothesApp").set({ categories: newCats }, { merge: true });
   }
 
   function addCategory(){
@@ -662,7 +662,7 @@
     affected.forEach(function(it){
       batch.update(db.collection("items").doc(it.id), { cat: newName });
     });
-    batch.set(db.collection("settings").doc("app"), { categories: newCats }, { merge: true });
+    batch.set(db.collection("settings").doc("clothesApp"), { categories: newCats }, { merge: true });
     batch.commit().then(function(){
       if(activeCat === oldName) activeCat = newName;
       renderCatsList();
@@ -743,7 +743,7 @@
     var v = parseInt(e.target.value, 10);
     var t = isNaN(v) || v < 0 ? 0 : v;
     thresholdInput.value = t;
-    db.collection("settings").doc("app").set({ threshold: t }, { merge: true }).catch(function(){
+    db.collection("settings").doc("clothesApp").set({ threshold: t }, { merge: true }).catch(function(){
       alert("Could not save the threshold. Check your connection and try again.");
     });
   });
@@ -809,7 +809,7 @@
         });
       });
       if(typeof pendingImportPayload.threshold === "number"){
-        batch.set(db.collection("settings").doc("app"), { threshold: pendingImportPayload.threshold }, { merge: true });
+        batch.set(db.collection("settings").doc("clothesApp"), { threshold: pendingImportPayload.threshold }, { merge: true });
       }
       return batch.commit();
     }).then(function(){
@@ -823,6 +823,25 @@
   };
 
   // --- live sync listeners ---
+
+  // Rebuilds CATS from whatever category names your items actually carry,
+  // so a tab can never truly disappear as long as it still has items in it —
+  // even if the shared settings document gets clobbered by another app.
+  function reconcileCategories(){
+    var union = CATS.slice();
+    data.forEach(function(d){
+      if(d.cat && union.indexOf(d.cat) === -1) union.push(d.cat);
+    });
+    DEFAULT_CATS.forEach(function(c){
+      if(union.indexOf(c) === -1) union.push(c);
+    });
+    var changed = union.length !== CATS.length || union.some(function(c,i){ return c !== CATS[i]; });
+    if(changed){
+      CATS = union;
+      saveCategories(CATS).catch(function(){});
+    }
+  }
+
   db.collection("items").onSnapshot(function(snapshot){
     data = snapshot.docs.map(function(doc){
       var d = doc.data();
@@ -830,6 +849,8 @@
     });
     gotFirstItemsSnapshot = true;
     setSyncStatus("synced", "Synced");
+    reconcileCategories();
+    if(CATS.indexOf(activeCat) === -1) activeCat = CATS[0] || null;
     renderTabs();
     renderSummary();
     renderList();
@@ -837,7 +858,7 @@
     setSyncStatus("offline", "Offline — changes will resume when reconnected");
   });
 
-  db.collection("settings").doc("app").onSnapshot(function(doc){
+  db.collection("settings").doc("clothesApp").onSnapshot(function(doc){
     var d = doc.exists ? doc.data() : {};
     threshold = typeof d.threshold === "number" ? d.threshold : 5;
     thresholdInput.value = threshold;
@@ -848,6 +869,7 @@
       CATS = DEFAULT_CATS.slice();
       saveCategories(CATS).catch(function(){});
     }
+    reconcileCategories();
     if(CATS.indexOf(activeCat) === -1) activeCat = CATS[0] || null;
 
     renderTabs();
